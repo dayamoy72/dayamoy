@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farmer Data Collection Form</title>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      line-height: 1.6;
+    }
+    form {
+      max-width: 600px;
+      margin: auto;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #218838;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Farmer Data Collection Form</h2>
+<form id="farmerForm">
+  <label for="wuaName">Name of WUA:</label>
+  <input type="text" id="wuaName" name="wuaName" required>
+
+  <label for="block">Block:</label>
+  <input type="text" id="block" name="block" required>
+
+  <label for="mouza">Mouza:</label>
+  <input type="text" id="mouza" name="mouza" required>
+
+  <label for="farmerName">Farmer's Name:</label>
+  <input type="text" id="farmerName" name="farmerName" required>
+
+  <label for="jl">JL:</label>
+  <input type="text" id="jl" name="jl" required>
+
+  <label for="plotNo">Plot No.:</label>
+  <input type="text" id="plotNo" name="plotNo" required>
+
+  <label for="variety">Name of Variety:</label>
+  <input type="text" id="variety" name="variety" required>
+
+  <label for="dcArea">DC Area:</label>
+  <input type="text" id="dcArea" name="dcArea" required>
+
+  <label for="intensification">Intensification:</label>
+  <input type="text" id="intensification" name="intensification" required>
+
+  <label for="quantitySeed">Quantity of Seed:</label>
+  <input type="text" id="quantitySeed" name="quantitySeed" required>
+
+  <label for="geolocation">Geolocation:</label>
+  <input type="text" id="geolocation" name="geolocation" readonly>
+  <button type="button" onclick="getLocation()">Capture Geolocation</button>
+
+  <label for="photo">Capture Photo:</label>
+  <input type="file" id="photo" name="photo" accept="image/*" capture="camera">
+
+  <label for="video">Record Video:</label>
+  <input type="file" id="video" name="video" accept="video/*" capture="camcorder">
+
+  <button type="button" onclick="addData()">Add Data</button>
+  <button type="button" onclick="downloadExcel()">Download Excel</button>
+</form>
+
+<script>
+  const collectedData = []; // Array to store all form submissions
+  const photoData = []; // Array to store base64 images for embedding
+
+  function getLocation() {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(position => {
+        document.getElementById('geolocation').value = 
+          `Latitude: ${position.coords.latitude}, Longitude: ${position.coords.longitude}`;
+      });
+    } else {
+      alert("Geolocation is not supported by your browser.");
+    }
+  }
+
+  async function addData() {
+    const form = document.getElementById('farmerForm');
+    const formData = new FormData(form);
+
+    const rowData = {};
+    for (const [key, value] of formData.entries()) {
+      if (key === "photo" || key === "video") continue; // Skip files for now
+      rowData[key] = value;
+    }
+    collectedData.push(rowData);
+
+    // Handle photo
+    const photoInput = document.getElementById("photo");
+    if (photoInput.files[0]) {
+      const photoFile = photoInput.files[0];
+      const photoBase64 = await readFileAsBase64(photoFile);
+      photoData.push(photoBase64);
+    } else {
+      photoData.push(null); // No photo uploaded
+    }
+
+    alert("Data added successfully!");
+    form.reset(); // Reset form after submission
+  }
+
+  async function downloadExcel() {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Farmer Data");
+
+    // Add headers
+    worksheet.columns = [
+      { header: "Name of WUA", key: "wuaName" },
+      { header: "Block", key: "block" },
+      { header: "Mouza", key: "mouza" },
+      { header: "Farmer's Name", key: "farmerName" },
+      { header: "JL", key: "jl" },
+      { header: "Plot No.", key: "plotNo" },
+      { header: "Name of Variety", key: "variety" },
+      { header: "DC Area", key: "dcArea" },
+      { header: "Intensification", key: "intensification" },
+      { header: "Quantity of Seed", key: "quantitySeed" },
+      { header: "Geolocation", key: "geolocation" },
+    ];
+
+    // Add rows
+    collectedData.forEach((data, index) => {
+      const row = worksheet.addRow(data);
+
+      // Embed photo if available
+      if (photoData[index]) {
+        const imageId = workbook.addImage({
+          base64: photoData[index],
+          extension: "jpeg",
+        });
+        worksheet.addImage(imageId, {
+          tl: { col: 12, row: row.number - 1 },
+          ext: { width: 150, height: 150 },
+        });
+      }
+    });
+
+    // Download the Excel file
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Farmer_Data.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = error => reject(error);
+      reader.readAsDataURL(file);
+    });
+  }
+</script>
+
+</body>
+</html>
