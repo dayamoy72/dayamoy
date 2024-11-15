@@ -58,73 +58,89 @@
                 <label for="file">Choose a file:</label>
                 <input type="file" id="file" name="file" required>
             </div>
+            <button type="button" onclick="authenticate()">Sign in with Google</button>
             <button type="button" onclick="uploadFile()">Upload</button>
         </form>
         <div class="status" id="status"></div>
     </div>
 
     <script>
+        const CLIENT_ID = '<1087557861129-9s8e5jp8jg9u5pvu2ug99v52ubkhs971.apps.googleusercontent.com>'; // Replace with your Google Cloud OAuth 2.0 client ID
+        const API_KEY = '<AIzaSyBQ42DX_xjcOwio54NwMkpkdbelgqNGokg>'; // Replace with your API key
+        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+        let accessToken = null;
+
+        function authenticate() {
+            gapi.load('client:auth2', () => {
+                gapi.auth2.init({ client_id: CLIENT_ID }).then(() => {
+                    const authInstance = gapi.auth2.getAuthInstance();
+                    authInstance.signIn({ scope: SCOPES }).then(() => {
+                        accessToken = gapi.auth.getToken().access_token;
+                        document.getElementById('status').textContent = 'Authenticated successfully!';
+                        document.getElementById('status').style.color = 'green';
+                    }).catch(error => {
+                        console.error('Authentication error:', error);
+                        document.getElementById('status').textContent = 'Authentication failed.';
+                        document.getElementById('status').style.color = 'red';
+                    });
+                });
+            });
+        }
+
         async function uploadFile() {
             const fileInput = document.getElementById('file');
             const status = document.getElementById('status');
 
-            // Ensure a file is selected
-            if (fileInput.files.length === 0) {
-                status.textContent = "Please select a file to upload.";
-                status.style.color = "red";
+            if (!fileInput.files.length) {
+                status.textContent = 'Please select a file to upload.';
+                status.style.color = 'red';
+                return;
+            }
+
+            if (!accessToken) {
+                status.textContent = 'Please sign in with Google first.';
+                status.style.color = 'red';
                 return;
             }
 
             const file = fileInput.files[0];
-            const apiKey = '<AIzaSyBQ42DX_xjcOwio54NwMkpkdbelgqNGokg>'; // Replace with your actual API key
-
-            // Google Drive upload endpoint
-            const uploadUrl = `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&key=${apiKey}`;
-
-            // Create FormData for the file
-            const formData = new FormData();
-            formData.append('file', file);
-
-            // Add metadata for the file
             const metadata = {
                 name: file.name,
                 mimeType: file.type
             };
 
-            const metaBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
-            const fileBlob = new Blob([file], { type: file.type });
+            const formData = new FormData();
+            formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            formData.append('file', file);
 
-            // Construct a multipart request body
-            const multipart = new FormData();
-            multipart.append('metadata', metaBlob);
-            multipart.append('file', fileBlob);
-
-            // Send the request
             try {
-                status.textContent = "Uploading...";
-                status.style.color = "blue";
+                status.textContent = 'Uploading...';
+                status.style.color = 'blue';
 
-                const response = await fetch(uploadUrl, {
+                const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
                     method: 'POST',
-                    body: multipart
+                    headers: new Headers({ Authorization: `Bearer ${accessToken}` }),
+                    body: formData
                 });
 
                 if (response.ok) {
                     const result = await response.json();
                     status.textContent = `File uploaded successfully! File ID: ${result.id}`;
-                    status.style.color = "green";
+                    status.style.color = 'green';
                 } else {
                     const error = await response.json();
                     console.error('Upload error:', error);
                     status.textContent = `Error uploading file: ${error.message}`;
-                    status.style.color = "red";
+                    status.style.color = 'red';
                 }
             } catch (error) {
                 console.error('Error:', error);
-                status.textContent = "An error occurred while uploading.";
-                status.style.color = "red";
+                status.textContent = 'An error occurred during upload.';
+                status.style.color = 'red';
             }
         }
     </script>
+    <script src="https://apis.google.com/js/api.js"></script>
 </body>
 </html>
