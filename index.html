@@ -34,6 +34,7 @@
       border: none;
       border-radius: 4px;
       cursor: pointer;
+      margin-right: 10px;
     }
     button:hover {
       background-color: #218838;
@@ -86,11 +87,13 @@
 
   <button type="button" onclick="addData()">Add Data</button>
   <button type="button" onclick="downloadExcel()">Download Excel</button>
+  <button type="button" onclick="shareFile()">WhatsApp File</button> <!-- New WhatsApp button -->
 </form>
 
 <script>
-  const collectedData = []; // Array to store all form submissions
-  const photoData = []; // Array to store base64 images for embedding
+  const collectedData = [];
+  const photoData = [];
+  let excelFileBlob = null; // Variable to store the generated Excel file for sharing
 
   function getLocation() {
     if (navigator.geolocation) {
@@ -109,23 +112,22 @@
 
     const rowData = {};
     for (const [key, value] of formData.entries()) {
-      if (key === "photo" || key === "video") continue; // Skip files for now
+      if (key === "photo" || key === "video") continue;
       rowData[key] = value;
     }
     collectedData.push(rowData);
 
-    // Handle photo
     const photoInput = document.getElementById("photo");
     if (photoInput.files[0]) {
       const photoFile = photoInput.files[0];
       const photoBase64 = await readFileAsBase64(photoFile);
       photoData.push(photoBase64);
     } else {
-      photoData.push(null); // No photo uploaded
+      photoData.push(null);
     }
 
     alert("Data added successfully!");
-    form.reset(); // Reset form after submission
+    form.reset();
   }
 
   async function downloadExcel() {
@@ -164,15 +166,51 @@
       }
     });
 
-    // Download the Excel file
+    // Set password protection
+    workbook.xlsx.writeBuffer().then(buffer => {
+      const zip = workbook.zip;
+      zip.password = "Daya@2007";
+      return workbook.xlsx.writeBuffer();
+    });
+
+    // Create timestamped filename
+    const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "");
+    const filename = `DC_Report_${timestamp}.xlsx`;
+
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    excelFileBlob = blob; // Save file blob for sharing
     const url = URL.createObjectURL(blob);
+
     const a = document.createElement("a");
     a.href = url;
-    a.download = "Farmer_Data.xlsx";
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function shareFile() {
+    if (excelFileBlob) {
+      const file = new File([excelFileBlob], `DC_Report_${new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "")}.xlsx`, {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      });
+      
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: "Farmer Data Report",
+            text: "Here is the farmer data report.",
+          });
+        } catch (error) {
+          alert("Error sharing file: " + error);
+        }
+      } else {
+        alert("Sharing is not supported on this browser.");
+      }
+    } else {
+      alert("Please download the Excel file first.");
+    }
   }
 
   function readFileAsBase64(file) {
